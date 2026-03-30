@@ -105,6 +105,16 @@ export interface WaitlistEntry {
     phone: string;
     isWhatsApp: boolean;
 }
+export type ReviewStatus = { pending: null } | { approved: null };
+export interface Review {
+    id: bigint;
+    name: string;
+    city: string;
+    rating: bigint;
+    message: string;
+    status: ReviewStatus;
+    createdAt: bigint;
+}
 export interface UserProfile {
     name: string;
 }
@@ -123,6 +133,8 @@ export interface backendInterface {
     getCallerUserRole(): Promise<UserRole>;
     getCount(): Promise<bigint>;
     getEntries(): Promise<Array<WaitlistEntry>>;
+    getLeadStatuses(): Promise<Array<[bigint, string]>>;
+    updateLeadStatus(id: bigint, status: string): Promise<void>;
     getPost(id: bigint): Promise<BlogPost | null>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     isCallerAdmin(): Promise<boolean>;
@@ -130,6 +142,12 @@ export interface backendInterface {
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     submitWaitlist(name: string, phone: string, isWhatsApp: boolean, city: string): Promise<bigint>;
     updatePost(id: bigint, title: string, description: string, content: string, publishDate: string): Promise<void>;
+    submitReview(name: string, city: string, rating: bigint, message: string): Promise<bigint>;
+    getApprovedReviews(): Promise<Array<Review>>;
+    getPendingReviews(): Promise<Array<Review>>;
+    approveReview(id: bigint): Promise<void>;
+    deleteReview(id: bigint): Promise<void>;
+    addManualReview(name: string, city: string, rating: bigint, message: string): Promise<bigint>;
 }
 import type { BlogPost as _BlogPost, UserProfile as _UserProfile, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
@@ -260,6 +278,34 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async getLeadStatuses(): Promise<Array<[bigint, string]>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getLeadStatuses();
+                return result as Array<[bigint, string]>;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getLeadStatuses();
+            return result as Array<[bigint, string]>;
+        }
+    }
+    async updateLeadStatus(arg0: bigint, arg1: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.updateLeadStatus(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.updateLeadStatus(arg0, arg1);
+            return result;
+        }
+    }
     async getPost(arg0: bigint): Promise<BlogPost | null> {
         if (this.processError) {
             try {
@@ -356,6 +402,78 @@ export class Backend implements backendInterface {
         } else {
             const result = await this.actor.updatePost(arg0, arg1, arg2, arg3, arg4);
             return result;
+        }
+    }
+    async submitReview(arg0: string, arg1: string, arg2: bigint, arg3: string): Promise<bigint> {
+        if (this.processError) {
+            try {
+                return await this.actor.submitReview(arg0, arg1, arg2, arg3);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            return await this.actor.submitReview(arg0, arg1, arg2, arg3);
+        }
+    }
+    async getApprovedReviews(): Promise<Array<Review>> {
+        if (this.processError) {
+            try {
+                return await this.actor.getApprovedReviews() as Array<Review>;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            return await this.actor.getApprovedReviews() as Array<Review>;
+        }
+    }
+    async getPendingReviews(): Promise<Array<Review>> {
+        if (this.processError) {
+            try {
+                return await this.actor.getPendingReviews() as Array<Review>;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            return await this.actor.getPendingReviews() as Array<Review>;
+        }
+    }
+    async approveReview(arg0: bigint): Promise<void> {
+        if (this.processError) {
+            try {
+                return await this.actor.approveReview(arg0);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            return await this.actor.approveReview(arg0);
+        }
+    }
+    async deleteReview(arg0: bigint): Promise<void> {
+        if (this.processError) {
+            try {
+                return await this.actor.deleteReview(arg0);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            return await this.actor.deleteReview(arg0);
+        }
+    }
+    async addManualReview(arg0: string, arg1: string, arg2: bigint, arg3: string): Promise<bigint> {
+        if (this.processError) {
+            try {
+                return await this.actor.addManualReview(arg0, arg1, arg2, arg3);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            return await this.actor.addManualReview(arg0, arg1, arg2, arg3);
         }
     }
 }

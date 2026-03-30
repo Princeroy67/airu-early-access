@@ -30,6 +30,16 @@ export interface WaitlistEntry {
   'phone' : string,
   'isWhatsApp' : boolean,
 }
+export type ReviewStatus = { 'pending' : null } | { 'approved' : null };
+export interface Review {
+  'id' : bigint,
+  'name' : string,
+  'city' : string,
+  'rating' : bigint,
+  'message' : string,
+  'createdAt' : bigint,
+  'status' : ReviewStatus,
+}
 export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
@@ -40,16 +50,24 @@ export interface _SERVICE {
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getCount' : ActorMethod<[], bigint>,
   'getEntries' : ActorMethod<[], Array<WaitlistEntry>>,
+  'getLeadStatuses' : ActorMethod<[], Array<[bigint, string]>>,
   'getPost' : ActorMethod<[bigint], [] | [BlogPost]>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'listPosts' : ActorMethod<[], Array<BlogPost>>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'submitWaitlist' : ActorMethod<[string, string, boolean, string], bigint>,
+  'updateLeadStatus' : ActorMethod<[bigint, string], undefined>,
   'updatePost' : ActorMethod<
     [bigint, string, string, string, string],
     undefined
   >,
+  'submitReview' : ActorMethod<[string, string, bigint, string], bigint>,
+  'getApprovedReviews' : ActorMethod<[], Array<Review>>,
+  'getPendingReviews' : ActorMethod<[], Array<Review>>,
+  'approveReview' : ActorMethod<[bigint], undefined>,
+  'deleteReview' : ActorMethod<[bigint], undefined>,
+  'addManualReview' : ActorMethod<[string, string, bigint, string], bigint>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

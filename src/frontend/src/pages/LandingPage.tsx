@@ -1,1131 +1,1325 @@
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import { Check, ChevronRight, Droplets, Flame, Wind } from "lucide-react";
-import { motion } from "motion/react";
-import { useEffect, useState } from "react";
-import { Header } from "../components/Header";
+import { Instagram, Mail, Play, Youtube, Zap } from "lucide-react";
+import { motion, useInView } from "motion/react";
+import { useRef, useState } from "react";
 import { WaitlistModal } from "../components/WaitlistModal";
+import {
+  type Review,
+  useGetApprovedReviews,
+  useSubmitReview,
+} from "../hooks/useQueries";
 
-const fadeUp = {
-  hidden: { opacity: 0, y: 32 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.8, ease: "easeOut" as const },
-  },
+function FadeIn({
+  children,
+  delay = 0,
+  className = "",
+}: {
+  children: React.ReactNode;
+  delay?: number;
+  className?: string;
+}) {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: "-60px" });
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: 28 }}
+      animate={inView ? { opacity: 1, y: 0 } : {}}
+      transition={{ duration: 0.65, delay, ease: [0.22, 1, 0.36, 1] }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+// Premium dark gradient placeholder
+const darkPlaceholder = {
+  background: "linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)",
+  borderRadius: "16px",
+  border: "1px solid rgba(255,255,255,0.07)",
+  boxShadow: "0 4px 24px rgba(0,0,0,0.22)",
+} as React.CSSProperties;
+
+// Light/beige placeholder style
+const lightPlaceholder = {
+  background: "linear-gradient(135deg, #f5f0e8 0%, #e8dcc8 100%)",
+  borderRadius: "16px",
+  border: "1px solid #d4cfc6",
+  boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
+} as React.CSSProperties;
+
+const placeholderLabelDark: React.CSSProperties = {
+  color: "rgba(255,255,255,0.28)",
+  fontSize: "0.8rem",
+  fontStyle: "italic",
+  letterSpacing: "0.06em",
+  textAlign: "center",
 };
 
-const stagger = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.15 } },
+const placeholderLabelLight: React.CSSProperties = {
+  color: "#9a948a",
+  fontSize: "0.8rem",
+  fontStyle: "italic",
+  letterSpacing: "0.06em",
+  textAlign: "center",
 };
 
-const problemCards = [
-  {
-    icon: <Flame className="w-5 h-5" />,
-    title: "Cooking smell stays",
-    desc: "Lingers long after you've left the kitchen.",
-  },
-  {
-    icon: <Wind className="w-5 h-5" />,
-    title: "Smoke lingers",
-    desc: "Stays trapped with nowhere to escape.",
-  },
-  {
-    icon: <Droplets className="w-5 h-5" />,
-    title: "Room feels heavy",
-    desc: "The same air, cycling endlessly.",
-  },
-];
+// Star display component
+function StarDisplay({
+  rating,
+  size = "sm",
+}: { rating: number; size?: "sm" | "lg" }) {
+  const fontSize = size === "lg" ? "1.2rem" : "0.95rem";
+  return (
+    <span style={{ fontSize, letterSpacing: "2px" }}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <span key={i} style={{ color: i <= rating ? "#d97706" : "#ddd" }}>
+          ★
+        </span>
+      ))}
+    </span>
+  );
+}
 
-const solutionLines = [
-  "No bulky machines.",
-  "No complicated setup.",
-  "No expensive purifier.",
-];
+// Interactive star selector
+function StarSelector({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  const [hovered, setHovered] = useState(0);
+  return (
+    <div className="flex gap-1" data-ocid="reviews.toggle">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <button
+          key={i}
+          type="button"
+          onClick={() => onChange(i)}
+          onMouseEnter={() => setHovered(i)}
+          onMouseLeave={() => setHovered(0)}
+          className="text-2xl transition-transform hover:scale-110 focus:outline-none"
+          style={{
+            color: i <= (hovered || value) ? "#d97706" : "#ccc",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: "2px",
+          }}
+          aria-label={`${i} star${i !== 1 ? "s" : ""}`}
+        >
+          ★
+        </button>
+      ))}
+    </div>
+  );
+}
 
-const howItWorksSteps = [
+const FALLBACK_REVIEWS = [
   {
-    step: "1",
-    title: "Attach",
-    desc: "Place it near your AC vent. No tools needed.",
-  },
-  {
-    step: "2",
-    title: "Run AC",
-    desc: "Works silently with airflow.",
-  },
-  {
-    step: "3",
-    title: "Breathe Better",
-    desc: "Air feels fresher over time.",
-  },
-];
-
-const howItFeelsCards = [
-  {
-    num: "01",
-    title: "Room feels lighter within minutes",
-    desc: "The air shifts noticeably. Less heaviness, more clarity.",
-  },
-  {
-    num: "02",
-    title: "No lingering smell after cooking",
-    desc: "Even with the door closed and AC on.",
-  },
-  {
-    num: "03",
-    title: "Better sleep at night",
-    desc: "Fresher air makes a real difference when you're resting.",
-  },
-];
-
-const benefits = [
-  "Works with your existing AC",
-  "Helps reduce trapped odor",
-  "No expensive purifier needed",
-  "Installs in seconds",
-  "Built for closed rooms",
-];
-
-const testimonials = [
-  {
-    quote: "Room feels less stuffy after using this.",
+    id: BigInt(-1),
     name: "Priya M.",
     city: "Bangalore",
+    rating: BigInt(5),
+    message: "Room actually feels breathable after a few hours.",
+    status: { approved: null } as { approved: null },
+    createdAt: BigInt(0),
   },
   {
-    quote: "Helpful especially at night with AC on.",
+    id: BigInt(-2),
     name: "Arjun K.",
     city: "Mumbai",
-  },
-  {
-    quote: "Didn't expect this to work, but it actually helps.",
-    name: "Sana R.",
-    city: "Delhi",
+    rating: BigInt(5),
+    message: "No smell after cooking with AC on.",
+    status: { approved: null } as { approved: null },
+    createdAt: BigInt(0),
   },
 ];
+
+function TestimonialsSection() {
+  const { data: approvedReviews = [], isLoading } = useGetApprovedReviews();
+  const submitReview = useSubmitReview();
+  const [submitted, setSubmitted] = useState(false);
+  const [form, setForm] = useState({
+    name: "",
+    city: "",
+    rating: 5,
+    message: "",
+  });
+  const [formError, setFormError] = useState("");
+
+  const displayReviews: Review[] =
+    approvedReviews.length > 0 ? approvedReviews : FALLBACK_REVIEWS;
+  const avgRating =
+    approvedReviews.length > 0
+      ? approvedReviews.reduce((sum, r) => sum + Number(r.rating), 0) /
+        approvedReviews.length
+      : null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError("");
+    if (!form.name.trim() || !form.city.trim() || !form.message.trim()) {
+      setFormError("Please fill in all fields.");
+      return;
+    }
+    try {
+      await submitReview.mutateAsync(form);
+      setSubmitted(true);
+    } catch {
+      setFormError("Something went wrong. Please try again.");
+    }
+  };
+
+  return (
+    <section className="py-28 md:py-32" style={{ background: "#f5f0e8" }}>
+      <div className="max-w-4xl mx-auto px-5">
+        <FadeIn>
+          <h2 className="text-4xl font-bold text-[#0a0a0a] mb-4">
+            What early users say
+          </h2>
+          {avgRating !== null && (
+            <div className="flex items-center gap-2 mb-10">
+              <span style={{ color: "#d97706", fontSize: "1.1rem" }}>⭐</span>
+              <span className="text-lg font-semibold text-[#0a0a0a]">
+                {avgRating.toFixed(1)}/5
+              </span>
+              <span className="text-[#888] text-sm">
+                from {approvedReviews.length} early user
+                {approvedReviews.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+          )}
+          {!avgRating && <div className="mb-10" />}
+        </FadeIn>
+
+        {isLoading ? (
+          <div
+            className="flex justify-center py-10"
+            data-ocid="reviews.loading_state"
+          >
+            <div className="w-8 h-8 rounded-full border-2 border-[#d97706] border-t-transparent animate-spin" />
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-6 mb-16">
+            {displayReviews.map((r, i) => (
+              <FadeIn key={r.id.toString()} delay={i * 0.1}>
+                <div
+                  className="bg-white rounded-2xl p-8 shadow-lg flex flex-col gap-4"
+                  data-ocid={`reviews.item.${i + 1}`}
+                >
+                  <StarDisplay rating={Number(r.rating)} />
+                  <p className="text-[#0a0a0a] text-xl leading-relaxed font-medium">
+                    &ldquo;{r.message}&rdquo;
+                  </p>
+                  <div className="flex items-center gap-3 mt-auto">
+                    <div
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+                      style={{ background: "#0a0a0a" }}
+                    >
+                      {r.name[0]}
+                    </div>
+                    <div>
+                      <p className="text-[#0a0a0a] font-bold text-sm">
+                        {r.name}
+                      </p>
+                      <p className="text-[#999] text-xs">{r.city}</p>
+                    </div>
+                  </div>
+                </div>
+              </FadeIn>
+            ))}
+          </div>
+        )}
+
+        {/* Review submission form */}
+        <FadeIn delay={0.2}>
+          <div className="bg-white rounded-2xl p-8 shadow-lg max-w-xl mx-auto">
+            <h3 className="text-xl font-bold text-[#0a0a0a] mb-1">
+              Share your experience
+            </h3>
+            <p className="text-[#888] text-sm mb-6">
+              Tried LumaAir? Tell others what you think.
+            </p>
+
+            {submitted ? (
+              <div
+                className="flex flex-col items-center py-6 gap-3 text-center"
+                data-ocid="reviews.success_state"
+              >
+                <span className="text-3xl">🙏</span>
+                <p className="text-[#0a0a0a] font-semibold text-lg">
+                  Thanks! Your review will appear after approval.
+                </p>
+                <p className="text-[#888] text-sm">
+                  We review all submissions to keep quality high.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <label
+                      htmlFor="review-name"
+                      className="block text-xs font-semibold text-[#555] mb-1.5 uppercase tracking-wide"
+                    >
+                      Name
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Your name"
+                      value={form.name}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, name: e.target.value }))
+                      }
+                      className="w-full rounded-xl border border-[#e5e0d8] bg-[#faf8f5] px-4 py-2.5 text-sm text-[#111] focus:outline-none focus:ring-2 focus:ring-[#d97706]"
+                      data-ocid="reviews.input"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="review-city"
+                      className="block text-xs font-semibold text-[#555] mb-1.5 uppercase tracking-wide"
+                    >
+                      City
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Your city"
+                      value={form.city}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, city: e.target.value }))
+                      }
+                      className="w-full rounded-xl border border-[#e5e0d8] bg-[#faf8f5] px-4 py-2.5 text-sm text-[#111] focus:outline-none focus:ring-2 focus:ring-[#d97706]"
+                      data-ocid="reviews.input"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label
+                    htmlFor="review-rating"
+                    className="block text-xs font-semibold text-[#555] mb-1.5 uppercase tracking-wide"
+                  >
+                    Rating
+                  </label>
+                  <StarSelector
+                    value={form.rating}
+                    onChange={(v) => setForm((p) => ({ ...p, rating: v }))}
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="review-message"
+                    className="block text-xs font-semibold text-[#555] mb-1.5 uppercase tracking-wide"
+                  >
+                    Your Experience
+                  </label>
+                  <textarea
+                    required
+                    rows={3}
+                    placeholder="Tell us what changed in your room…"
+                    value={form.message}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, message: e.target.value }))
+                    }
+                    className="w-full rounded-xl border border-[#e5e0d8] bg-[#faf8f5] px-4 py-2.5 text-sm text-[#111] focus:outline-none focus:ring-2 focus:ring-[#d97706] resize-none"
+                    data-ocid="reviews.textarea"
+                  />
+                </div>
+                {formError && (
+                  <p
+                    className="text-red-500 text-sm"
+                    data-ocid="reviews.error_state"
+                  >
+                    {formError}
+                  </p>
+                )}
+                <button
+                  type="submit"
+                  disabled={submitReview.isPending}
+                  className="w-full rounded-full py-3 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-60"
+                  style={{ background: "#0a0a0a" }}
+                  data-ocid="reviews.submit_button"
+                >
+                  {submitReview.isPending ? "Submitting…" : "Submit Review"}
+                </button>
+              </form>
+            )}
+          </div>
+        </FadeIn>
+      </div>
+    </section>
+  );
+}
 
 export function LandingPage() {
   const [modalOpen, setModalOpen] = useState(false);
-  const [showSticky, setShowSticky] = useState(false);
 
-  useEffect(() => {
-    const handler = () => {
-      setShowSticky(window.scrollY > window.innerHeight * 0.8);
-    };
-    window.addEventListener("scroll", handler, { passive: true });
-    return () => window.removeEventListener("scroll", handler);
-  }, []);
+  const openModal = () => setModalOpen(true);
+  const closeModal = () => setModalOpen(false);
 
   return (
-    <div className="min-h-screen bg-white">
-      <Header onJoinClick={() => setModalOpen(true)} />
-      <WaitlistModal open={modalOpen} onClose={() => setModalOpen(false)} />
+    <div className="min-h-screen bg-white font-sans">
+      {/* Navbar */}
+      <nav
+        className="fixed top-0 left-0 right-0 z-50 border-b border-white/10 backdrop-blur-md"
+        style={{ background: "rgba(10,10,10,0.85)" }}
+      >
+        <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
+          <a
+            href="/"
+            className="text-white font-bold text-lg tracking-widest"
+            data-ocid="nav.link"
+          >
+            LumaAir
+          </a>
+          <div className="flex items-center gap-4">
+            <a
+              href="/blog"
+              className="text-white/60 hover:text-white text-sm font-medium transition-colors hidden sm:block"
+              data-ocid="nav.link"
+            >
+              Blog
+            </a>
+            <button
+              type="button"
+              onClick={openModal}
+              className="bg-white text-[#0a0a0a] text-sm font-semibold px-5 py-2 rounded-full hover:bg-white/90 transition-all"
+              data-ocid="nav.primary_button"
+            >
+              Reserve Your LumaAir
+            </button>
+          </div>
+        </div>
+      </nav>
 
-      {/* Section 1 — Hero */}
-      <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
+      {/* Hero */}
+      <section
+        className="min-h-screen flex items-center pt-16 relative overflow-hidden"
+        style={{
+          background:
+            "linear-gradient(160deg, #0a0a0a 0%, #1a1410 60%, #0d0c0a 100%)",
+        }}
+      >
+        {/* Ambient background glow */}
         <div
-          className="absolute inset-0 bg-cover bg-center"
+          className="absolute inset-0 pointer-events-none"
           style={{
-            backgroundImage:
-              "url('/assets/generated/hero-bedroom-ac.dim_1600x900.jpg')",
+            background:
+              "radial-gradient(ellipse 70% 50% at 30% 50%, rgba(217,119,6,0.10) 0%, transparent 70%)",
           }}
         />
-        <div className="absolute inset-0 bg-[#111111]/75" />
-        <img
-          src="/assets/generated/airflow-visual-transparent.dim_800x600.png"
-          alt=""
-          aria-hidden="true"
-          className="absolute right-0 bottom-0 w-2/3 max-w-2xl opacity-10 pointer-events-none"
-        />
-        <div className="relative max-w-6xl mx-auto px-6 pt-20 pb-16 text-white">
-          <motion.div
-            variants={stagger}
-            initial="hidden"
-            animate="visible"
-            className="max-w-[700px]"
-          >
-            <motion.div variants={fadeUp}>
-              <span className="inline-block mb-6 px-4 py-1.5 rounded-full border border-white/40 text-xs tracking-[0.2em] uppercase font-medium text-white/80">
-                Pre-Launch • Limited Batch
-              </span>
-            </motion.div>
-            <motion.p
-              variants={fadeUp}
-              className="text-sm text-white/60 mb-3 tracking-wide"
+        <div className="max-w-6xl mx-auto px-5 py-28 md:py-36 relative z-10 w-full">
+          <div className="flex flex-col md:flex-row items-center gap-12 md:gap-16">
+            {/* Text left */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+              className="flex-1 max-w-2xl"
             >
-              Used in 100+ Indian homes during testing
-            </motion.p>
-            <motion.h1
-              variants={fadeUp}
-              className="font-display text-5xl sm:text-6xl lg:text-7xl font-bold leading-tight mb-6"
-            >
-              Breathe Better.
-              <br />
-              Even in a Closed AC Room.
-            </motion.h1>
-            <motion.p
-              variants={fadeUp}
-              className="text-lg sm:text-xl text-white/80 mb-3 leading-relaxed"
-            >
-              A small add-on module that works with your AC to help reduce
-              trapped odor and improve indoor air.
-            </motion.p>
-            <motion.p
-              variants={fadeUp}
-              className="text-base text-white/60 mb-10 leading-relaxed"
-            >
-              Works with your existing AC. No installation needed.
-            </motion.p>
-            <motion.div variants={fadeUp} className="mb-2">
+              <div className="inline-flex items-center border border-white/20 rounded-full px-4 py-1.5 mb-8">
+                <span className="text-white/70 text-xs font-medium tracking-widest uppercase">
+                  Pre-Order · Limited First Batch
+                </span>
+              </div>
+              <h1 className="text-5xl md:text-7xl font-bold leading-[1.05] tracking-tight mb-6">
+                <span className="text-white block">Your AC doesn&apos;t</span>
+                <span className="text-white block">remove odor.</span>
+                <em className="not-italic block" style={{ color: "#d97706" }}>
+                  LumaAir does.
+                </em>
+              </h1>
+              <p className="text-white/60 text-lg md:text-xl leading-relaxed max-w-xl mb-10">
+                A simple module that neutralizes trapped smell in closed AC
+                rooms — no electricity, no sprays, no artificial fragrance.
+              </p>
               <button
                 type="button"
-                onClick={() => setModalOpen(true)}
-                className="rounded-full bg-white text-[#111111] px-8 py-4 text-base font-medium hover:bg-white/90 active:scale-95 transition-all duration-200"
+                onClick={openModal}
+                className="bg-white text-[#0a0a0a] font-semibold text-base px-8 py-4 rounded-full hover:bg-white/95 hover:scale-[1.02] active:scale-95 transition-all duration-200 shadow-xl"
                 data-ocid="hero.primary_button"
               >
-                Pre-order Early Access
+                Reserve Your LumaAir
               </button>
-            </motion.div>
-            <motion.p variants={fadeUp} className="text-white/60 text-sm mb-6">
-              No payment required • Limited first batch
-            </motion.p>
-            <motion.p
-              variants={fadeUp}
-              className="text-white/50 text-sm mt-2 mb-3"
-            >
-              Follow our journey
-            </motion.p>
-            <motion.div variants={fadeUp} className="flex items-center gap-3">
-              <a
-                href="https://instagram.com/breathefreshair.india"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-full border border-white/40 text-white/80 text-xs font-medium px-5 py-2 hover:bg-white/10 hover:border-white/60 transition-all duration-200"
-                data-ocid="hero.link"
-              >
-                Instagram
-              </a>
-              <a
-                href="https://youtube.com/@BreatheFreshAir"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-full border border-white/40 text-white/80 text-xs font-medium px-5 py-2 hover:bg-white/10 hover:border-white/60 transition-all duration-200"
-                data-ocid="hero.link"
-              >
-                YouTube
-              </a>
-            </motion.div>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Trust Booster */}
-      <section className="bg-[#faf8f5] py-10 border-b border-[#f0ebe3]">
-        <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-12 text-center">
-          <p className="text-[#888] text-sm">
-            Trusted by early users across Indian homes
-          </p>
-          <span className="hidden sm:block w-px h-4 bg-[#ddd]" />
-          <p className="text-[#111111] text-sm font-medium">
-            100+ people already joined the waitlist
-          </p>
-        </div>
-      </section>
-
-      {/* What Exactly Is Airu? */}
-      <section id="what-is-airu" className="bg-white py-36">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
-            <motion.div
-              variants={stagger}
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, margin: "-80px" }}
-            >
-              <motion.p
-                variants={fadeUp}
-                className="text-sm tracking-[0.15em] uppercase text-[#999] mb-4"
-              >
-                The Product
-              </motion.p>
-              <motion.h2
-                variants={fadeUp}
-                className="text-5xl sm:text-6xl font-bold text-[#111111] mb-8 leading-tight"
-              >
-                What Exactly Is Airu?
-              </motion.h2>
-              <motion.div variants={stagger} className="space-y-5">
-                <motion.p
-                  variants={fadeUp}
-                  className="text-[#6b6b6b] text-lg leading-relaxed"
-                >
-                  Airu is a compact add-on module designed to work with your AC
-                  airflow.
-                </motion.p>
-                <motion.p
-                  variants={fadeUp}
-                  className="text-[#6b6b6b] text-lg leading-relaxed"
-                >
-                  It helps reduce odor buildup inside closed rooms by improving
-                  how air moves and cycles.
-                </motion.p>
-                <motion.p
-                  variants={fadeUp}
-                  className="text-[#6b6b6b] text-lg leading-relaxed"
-                >
-                  No filters. No heavy machines. Just a simple add-on that works
-                  in the background.
-                </motion.p>
-              </motion.div>
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0, x: 32 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true, margin: "-80px" }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-              className="flex items-center justify-center"
-            >
-              <div className="bg-[#f8f6f2] rounded-3xl p-8 w-full">
-                <img
-                  src="/assets/generated/airu-product-mockup.dim_1200x800.jpg"
-                  alt="Airu product near AC vent"
-                  className="w-full h-auto rounded-2xl"
-                />
-                <p className="text-center text-sm text-[#aaa] mt-4 tracking-wide">
-                  Designed to work with your AC airflow
+              <div className="mt-4 space-y-1">
+                <p className="text-white/35 text-sm">
+                  No upfront payment · Limited first batch
                 </p>
+                <p className="text-white/25 text-xs">
+                  Early access users across India
+                </p>
+              </div>
+            </motion.div>
+
+            {/* Floating product image — right side on desktop */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 1, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              className="flex-shrink-0 flex items-center justify-center w-full md:w-auto"
+            >
+              <div className="relative flex items-center justify-center">
+                {/* Radial amber glow behind product */}
+                <div
+                  className="absolute pointer-events-none"
+                  style={{
+                    width: "500px",
+                    height: "500px",
+                    background:
+                      "radial-gradient(ellipse at center, rgba(251,191,36,0.25) 0%, transparent 70%)",
+                    transform: "translate(-50%, -50%)",
+                    top: "50%",
+                    left: "50%",
+                    borderRadius: "50%",
+                  }}
+                />
+                {/* Product image with float animation */}
+                <img
+                  src="/assets/generated/lumaair-product-hero.dim_800x900.png"
+                  alt="LumaAir Odor Neutralizer"
+                  className="animate-float relative z-10 drop-shadow-2xl"
+                  style={{
+                    width: "clamp(200px, 28vw, 340px)",
+                    height: "auto",
+                    filter:
+                      "drop-shadow(0 24px 48px rgba(217,119,6,0.18)) drop-shadow(0 8px 24px rgba(0,0,0,0.55))",
+                  }}
+                />
               </div>
             </motion.div>
           </div>
         </div>
       </section>
 
-      {/* Section 2 — Problem */}
-      <section id="problem" className="bg-[#f0ebe3] py-36">
-        <div className="max-w-6xl mx-auto px-6">
-          <motion.div
-            variants={stagger}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-80px" }}
-          >
-            <motion.h2 variants={fadeUp} className="max-w-[700px] mb-6">
-              <span className="text-3xl sm:text-4xl font-medium text-[#444] block mb-4 leading-[1.3]">
-                You close the door.
-                <br />
-                Turn on the AC.
-              </span>
-              <span className="text-5xl sm:text-6xl font-bold text-[#111111] block mb-6 leading-[1.2]">
-                But the smell stays.
-              </span>
-            </motion.h2>
-            <motion.p
-              variants={fadeUp}
-              className="text-[#5c5c5c] text-lg max-w-[700px] leading-loose mb-8"
+      {/* Hero Image Section */}
+      <section
+        className="relative overflow-hidden"
+        style={{ background: "#0a0a0a" }}
+      >
+        <FadeIn>
+          <div className="relative" style={{ minHeight: "50vh" }}>
+            <img
+              src="/assets/generated/hero-bedroom.dim_1600x900.jpg"
+              alt="Modern bedroom with AC"
+              className="w-full h-full object-cover"
+              style={{ minHeight: "50vh", display: "block" }}
+            />
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  "linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.2) 50%, transparent 100%)",
+              }}
+            />
+            <div className="absolute bottom-0 left-0 px-8 pb-8 md:px-14 md:pb-12">
+              <p className="text-white font-bold text-2xl md:text-4xl">
+                Designed for closed AC rooms
+              </p>
+              <p
+                className="mt-2 font-semibold text-base tracking-widest uppercase"
+                style={{ color: "#d97706" }}
+              >
+                LumaAir
+              </p>
+            </div>
+          </div>
+        </FadeIn>
+      </section>
+
+      {/* ═══════════════════════════════════════════════ */}
+      {/* PRODUCT SECTION — dominant, directly after Hero */}
+      {/* ═══════════════════════════════════════════════ */}
+      <section
+        className="py-32 md:py-44"
+        style={{
+          background:
+            "linear-gradient(180deg, #F5F0E8 0%, #EDE8DF 50%, #F5F0E8 100%)",
+        }}
+      >
+        <div className="max-w-3xl mx-auto px-5">
+          {/* Main product image — large, centered */}
+          <FadeIn>
+            <div
+              className="w-full flex items-center justify-center mb-8"
+              style={{
+                minHeight: "520px",
+                background:
+                  "linear-gradient(160deg, #111110 0%, #1c1916 40%, #0d0c0a 100%)",
+                borderRadius: "28px",
+                boxShadow:
+                  "0 32px 80px rgba(0,0,0,0.22), 0 8px 28px rgba(0,0,0,0.14)",
+                overflow: "hidden",
+                position: "relative",
+              }}
             >
-              Because your room isn't getting fresh air — it's just circulating
-              the same air again and again.
-            </motion.p>
-            <motion.div
-              variants={stagger}
-              className="grid sm:grid-cols-3 gap-5"
+              {/* Glow */}
+              <div
+                style={{
+                  position: "absolute",
+                  width: "60%",
+                  height: "60%",
+                  background:
+                    "radial-gradient(ellipse at center, rgba(251,191,36,0.15) 0%, transparent 70%)",
+                  top: "50%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)",
+                  pointerEvents: "none",
+                }}
+              />
+              <img
+                src="/assets/generated/lumaair-product-hero.dim_800x900.png"
+                alt="LumaAir Odor Neutralizer"
+                className="relative z-10"
+                style={{
+                  maxHeight: "480px",
+                  width: "auto",
+                  objectFit: "contain",
+                  filter: "drop-shadow(0 20px 40px rgba(0,0,0,0.55))",
+                }}
+              />
+            </div>
+          </FadeIn>
+
+          {/* Close-up detail placeholder */}
+          <FadeIn delay={0.1}>
+            <div
+              className="w-full flex items-center justify-center mb-3"
+              style={{
+                ...darkPlaceholder,
+                aspectRatio: "3/1.2",
+                background: "linear-gradient(135deg, #1c1916 0%, #2a2520 100%)",
+              }}
             >
-              {problemCards.map((card, i) => (
-                <motion.div
-                  key={card.title}
-                  variants={fadeUp}
-                  className="bg-white rounded-2xl p-6 shadow-card"
-                  data-ocid={`problem.item.${i + 1}`}
-                >
-                  <div className="w-10 h-10 rounded-xl bg-[#f0ebe3] flex items-center justify-center mb-4 text-[#111111]">
-                    {card.icon}
-                  </div>
-                  <h3 className="font-semibold text-[#111111] mb-1">
-                    {card.title}
-                  </h3>
-                  <p className="text-[#6b6b6b] text-sm leading-relaxed">
-                    {card.desc}
+              <span style={placeholderLabelDark}>
+                [ Close-Up Product Detail ]
+              </span>
+            </div>
+          </FadeIn>
+
+          <FadeIn delay={0.15}>
+            <p
+              className="text-center text-sm italic mb-16"
+              style={{ color: "#9a948a" }}
+            >
+              Engineered with precision materials for consistent odor
+              neutralization.
+            </p>
+          </FadeIn>
+
+          {/* Text block */}
+          <FadeIn delay={0.2}>
+            <h2 className="text-4xl md:text-5xl font-bold text-[#0a0a0a] leading-tight mb-4">
+              Meet LumaAir Odor Neutralizer
+            </h2>
+            <p className="text-[#666] text-lg leading-relaxed mb-8">
+              Works with your AC airflow to naturally remove odor.
+            </p>
+            <div className="space-y-4">
+              {["No electricity", "No fragrance", "No filters"].map((point) => (
+                <div key={point} className="flex items-center gap-3">
+                  <div
+                    className="w-2 h-2 rounded-full flex-shrink-0"
+                    style={{ background: "#d97706" }}
+                  />
+                  <p className="text-[#0a0a0a] font-semibold text-lg">
+                    {point}
                   </p>
-                </motion.div>
+                </div>
               ))}
-            </motion.div>
-          </motion.div>
+            </div>
+          </FadeIn>
         </div>
       </section>
 
-      {/* Section 3 — Insight */}
-      <section className="bg-white py-36">
-        <div className="max-w-6xl mx-auto px-6">
-          <motion.div
-            variants={stagger}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-80px" }}
-          >
-            <motion.p
-              variants={fadeUp}
-              className="text-sm tracking-[0.15em] uppercase text-[#999] mb-4"
-            >
-              The Reality
-            </motion.p>
-            <motion.h2
-              variants={fadeUp}
-              className="font-display text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-[#111111] mb-4 leading-tight"
-            >
-              Your AC Was Never
+      {/* Problem */}
+      <section className="py-28 md:py-32" style={{ background: "#f5f0e8" }}>
+        <div className="max-w-4xl mx-auto px-5">
+          <FadeIn>
+            <h2 className="text-4xl md:text-5xl font-bold text-[#0a0a0a] leading-tight mb-14 max-w-lg">
+              Your room feels closed.
               <br />
-              Designed to Remove Odor.
-            </motion.h2>
-            <motion.p
-              variants={fadeUp}
-              className="text-2xl text-[#444] mb-10 font-medium"
-            >
-              It only circulates air.
-            </motion.p>
-            <motion.ul variants={stagger} className="space-y-3">
-              {["Cooking smell stays", "Smoke lingers", "Room feels heavy"].map(
-                (item, i) => (
-                  <motion.li
-                    key={item}
-                    variants={fadeUp}
-                    className="flex items-center gap-3 text-lg text-[#5c5c5c]"
-                    data-ocid={`insight.item.${i + 1}`}
-                  >
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#111111]" />
-                    {item}
-                  </motion.li>
-                ),
-              )}
-            </motion.ul>
-            <motion.p
-              variants={fadeUp}
-              className="text-[#888] text-base mt-8 leading-relaxed italic max-w-[700px]"
-            >
-              Most people don't realize this — but ACs don't bring in fresh air.
-            </motion.p>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Section 4 — Solution */}
-      <section id="solution" className="bg-[#f0ebe3] py-36">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
-            <motion.div
-              variants={stagger}
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, margin: "-80px" }}
-            >
-              <motion.h2
-                variants={fadeUp}
-                className="text-4xl sm:text-5xl font-semibold text-[#111111] mb-6 leading-tight max-w-[700px]"
-              >
-                So we built something that works with your AC — not against it.
-              </motion.h2>
-              <motion.p
-                variants={fadeUp}
-                className="text-[#5c5c5c] text-lg leading-relaxed mb-8 max-w-[700px]"
-              >
-                A compact air module that uses your AC airflow to reduce odor
-                buildup and improve air quality over time.
-              </motion.p>
-              <motion.div variants={stagger} className="space-y-3 mb-6">
-                {solutionLines.map((line) => (
-                  <motion.p
-                    key={line}
-                    variants={fadeUp}
-                    className="text-xl font-semibold text-[#111111]"
-                  >
-                    {line}
-                  </motion.p>
-                ))}
-              </motion.div>
-              <motion.p
-                variants={fadeUp}
-                className="text-[#6b6b6b] text-base italic leading-relaxed"
-              >
-                Just attach it once. It works automatically.
-              </motion.p>
-              <motion.p variants={fadeUp} className="text-[#aaa] text-sm mt-6">
-                Built after observing real problems in closed AC rooms.
-              </motion.p>
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0, x: 32 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true, margin: "-80px" }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-              className="relative flex items-center justify-center"
-            >
-              <div className="w-full">
-                <button
-                  type="button"
-                  className="relative rounded-3xl overflow-hidden bg-[#111] aspect-video shadow-2xl cursor-pointer group w-full"
-                  onClick={() => alert("Coming soon — stay tuned!")}
-                  data-ocid="solution.canvas_target"
+              Because it is.
+            </h2>
+          </FadeIn>
+          <div className="grid md:grid-cols-3 gap-5 mb-14">
+            {[
+              { label: "Cooking smell", dark: true },
+              { label: "Smoke", dark: false },
+              { label: "Closed room", dark: true },
+            ].map((item, i) => (
+              <FadeIn key={item.label} delay={i * 0.1}>
+                <div
+                  className="rounded-2xl overflow-hidden"
+                  style={{
+                    boxShadow: "0 4px 24px rgba(0,0,0,0.10)",
+                  }}
                 >
-                  <div className="absolute inset-0 bg-gradient-to-br from-[#1a1a1a] to-[#2d2d2d]" />
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
-                    <div className="w-16 h-16 rounded-full bg-white/10 border border-white/20 flex items-center justify-center group-hover:bg-white/20 transition-all duration-300">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="white"
-                        className="w-6 h-6 translate-x-0.5"
-                        aria-hidden="true"
-                      >
-                        <polygon points="5,3 19,12 5,21" />
-                      </svg>
-                    </div>
-                    <p className="text-white/70 text-sm font-medium tracking-wide">
-                      See how Airu works in a real room
+                  {/* Premium gradient placeholder */}
+                  <div
+                    style={{
+                      height: "180px",
+                      background: item.dark
+                        ? "linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)"
+                        : "linear-gradient(135deg, #f5f0e8 0%, #e8dcc8 100%)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: "16px 16px 0 0",
+                    }}
+                  >
+                    <span
+                      style={{
+                        ...(item.dark
+                          ? placeholderLabelDark
+                          : placeholderLabelLight),
+                      }}
+                    >
+                      {item.label}
+                    </span>
+                  </div>
+                  <div
+                    className="p-6"
+                    style={{
+                      background: item.dark ? "#1a1a1a" : "#ede8df",
+                    }}
+                  >
+                    <p
+                      className="font-semibold text-lg"
+                      style={{ color: item.dark ? "#fff" : "#0a0a0a" }}
+                    >
+                      {item.label === "Cooking smell"
+                        ? "Cooking smell stays"
+                        : item.label === "Smoke"
+                          ? "Smoke lingers"
+                          : "Air feels heavy"}
                     </p>
                   </div>
-                </button>
-                <p className="text-center text-sm text-[#888] mt-4">
-                  Designed to work with your AC airflow
+                </div>
+              </FadeIn>
+            ))}
+          </div>
+          <FadeIn>
+            <p
+              className="text-xl md:text-2xl font-medium italic"
+              style={{ color: "#d97706" }}
+            >
+              Your AC circulates air. It doesn&apos;t refresh it.
+            </p>
+          </FadeIn>
+        </div>
+      </section>
+
+      {/* ════════════════════════════════════ */}
+      {/* CINEMATIC SECTION                    */}
+      {/* ════════════════════════════════════ */}
+      <section
+        style={{
+          background: "#000000",
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <FadeIn>
+          <div
+            style={{
+              maxWidth: "800px",
+              textAlign: "center",
+              padding: "0 20px",
+            }}
+          >
+            <p
+              className="font-bold text-white leading-tight"
+              style={{ fontSize: "clamp(2rem, 6vw, 4.5rem" }}
+            >
+              The same air keeps circulating.
+              <br />
+              So does the smell.
+            </p>
+          </div>
+        </FadeIn>
+      </section>
+
+      {/* Insight Section */}
+      <section className="py-24 md:py-32 bg-white">
+        <div className="max-w-5xl mx-auto px-5">
+          <div className="grid md:grid-cols-2 gap-10 items-center">
+            <FadeIn>
+              <img
+                src="/assets/generated/insight-airflow.dim_800x600.jpg"
+                alt="AC airflow loop"
+                className="w-full rounded-2xl object-cover"
+                style={{ aspectRatio: "4/3" }}
+              />
+            </FadeIn>
+            <FadeIn delay={0.15}>
+              <div className="flex items-center justify-center md:justify-start">
+                <p className="text-3xl md:text-4xl font-bold text-[#0a0a0a] leading-tight">
+                  Your AC keeps recycling the same air.
                 </p>
               </div>
-            </motion.div>
+            </FadeIn>
           </div>
         </div>
       </section>
 
-      {/* Section 5 — How It Works */}
-      <section id="how-it-works" className="bg-white py-36">
-        <div className="max-w-6xl mx-auto px-6">
-          <motion.div
-            variants={stagger}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-80px" }}
-          >
-            <motion.p
-              variants={fadeUp}
-              className="text-sm tracking-[0.15em] uppercase text-[#999] mb-4"
-            >
-              How It Works
-            </motion.p>
-            <motion.h2
-              variants={fadeUp}
-              className="text-4xl sm:text-5xl font-semibold text-[#111111] mb-12"
-            >
-              Simple. Effective. Invisible.
-            </motion.h2>
-            <motion.div
-              variants={stagger}
-              className="grid sm:grid-cols-3 gap-8 mb-10"
-            >
-              {howItWorksSteps.map((s, i) => (
-                <motion.div
-                  key={s.step}
-                  variants={fadeUp}
-                  whileHover={{ y: -4 }}
-                  transition={{ type: "spring", stiffness: 300 }}
-                  className="relative bg-[#fafafa] rounded-2xl p-6 border border-[#f0f0f0]"
-                  data-ocid={`howto.item.${i + 1}`}
-                >
-                  {i < 2 && (
-                    <div className="hidden sm:block absolute top-5 left-full w-8 z-10">
-                      <ChevronRight className="w-5 h-5 text-[#ccc] -translate-x-2" />
-                    </div>
-                  )}
-                  <div className="font-display text-5xl font-bold text-[#f0ebe3] mb-3">
-                    {s.step}
-                  </div>
-                  <h3 className="text-xl font-semibold text-[#111111] mb-2">
-                    {s.title}
-                  </h3>
-                  <p className="text-[#6b6b6b] text-sm leading-relaxed">
-                    {s.desc}
-                  </p>
-                </motion.div>
+      {/* Solution */}
+      <section className="py-28 md:py-32" style={{ background: "#f5f0e8" }}>
+        <div className="max-w-3xl mx-auto px-5">
+          <FadeIn>
+            <img
+              src="/assets/generated/solution-product.dim_1200x675.jpg"
+              alt="LumaAir near AC vent"
+              className="w-full rounded-2xl object-cover mb-10"
+              style={{ aspectRatio: "16/9" }}
+            />
+          </FadeIn>
+          <FadeIn delay={0.1}>
+            <h2 className="text-4xl md:text-5xl font-bold text-[#0a0a0a] leading-tight mb-8">
+              A better way to fix room odor
+            </h2>
+          </FadeIn>
+          <FadeIn delay={0.15}>
+            <p className="text-[#555] text-lg md:text-xl leading-relaxed mb-8">
+              LumaAir works with your AC airflow to naturally neutralize odor.
+            </p>
+            <div className="space-y-3 mb-8">
+              {["No sprays.", "No perfumes.", "No electricity."].map((line) => (
+                <p key={line} className="text-[#0a0a0a] font-bold text-xl">
+                  {line}
+                </p>
               ))}
-            </motion.div>
-            <motion.p variants={fadeUp} className="text-[#888] text-sm">
-              No noise. No maintenance. No effort.
-            </motion.p>
-          </motion.div>
+            </div>
+            <p className="text-[#555] text-lg">Just cleaner air over time.</p>
+          </FadeIn>
         </div>
       </section>
 
-      {/* How It Feels Section */}
-      <section className="bg-white py-36 border-t border-[#f0f0f0]">
-        <div className="max-w-6xl mx-auto px-6">
-          <motion.div
-            variants={stagger}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-80px" }}
-          >
-            <motion.p
-              variants={fadeUp}
-              className="text-sm tracking-[0.15em] uppercase text-[#999] mb-4"
-            >
-              The Experience
-            </motion.p>
-            <motion.h2
-              variants={fadeUp}
-              className="text-4xl sm:text-5xl font-semibold text-[#111111] mb-14"
-            >
-              What you'll notice after using Airu
-            </motion.h2>
-            <motion.div
-              variants={stagger}
-              className="grid sm:grid-cols-3 gap-6"
-            >
-              {howItFeelsCards.map((card, i) => (
-                <motion.div
-                  key={card.num}
-                  variants={fadeUp}
-                  whileHover={{ y: -4 }}
-                  transition={{ type: "spring", stiffness: 300 }}
-                  className="bg-[#f8f6f2] rounded-2xl p-8"
-                  data-ocid={`feels.item.${i + 1}`}
+      {/* How It Works */}
+      <section className="py-28 md:py-32" style={{ background: "#0a0a0a" }}>
+        <div className="max-w-4xl mx-auto px-5">
+          <FadeIn>
+            <h2 className="text-4xl md:text-5xl font-bold text-white leading-tight mb-6">
+              How it works
+            </h2>
+            <p className="text-white/50 text-lg leading-relaxed max-w-2xl mb-14">
+              Inside LumaAir is a natural adsorption material that captures and
+              neutralizes odor particles as air flows through it. No masking. No
+              chemicals in the air. Just removal.
+            </p>
+          </FadeIn>
+          <div className="grid md:grid-cols-3 gap-5">
+            {[
+              {
+                num: "01",
+                text: "Attach near AC vent",
+                label: "[ Product on AC Vent ]",
+              },
+              {
+                num: "02",
+                text: "Air flows through LumaAir",
+                label: "[ Air Flowing Through Device ]",
+              },
+              {
+                num: "03",
+                text: "Odor particles get neutralized",
+                label: "[ Clean Air Output ]",
+              },
+            ].map((step, i) => (
+              <FadeIn key={step.num} delay={i * 0.1}>
+                <div
+                  className="rounded-2xl overflow-hidden"
+                  style={{ background: "rgba(255,255,255,0.05)" }}
                 >
-                  <div className="text-6xl font-bold text-[#ede8e0] mb-5 leading-none">
-                    {card.num}
+                  <div
+                    className="w-full flex items-center justify-center"
+                    style={{
+                      height: "180px",
+                      background:
+                        "linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)",
+                      borderRadius: "16px 16px 0 0",
+                      borderBottom: "1px solid rgba(255,255,255,0.06)",
+                    }}
+                  >
+                    <span
+                      style={{ ...placeholderLabelDark, padding: "0 12px" }}
+                    >
+                      {step.label}
+                    </span>
                   </div>
-                  <h3 className="text-lg font-semibold text-[#111111] mb-3 leading-snug">
-                    {card.title}
-                  </h3>
-                  <p className="text-[#6b6b6b] text-sm leading-relaxed">
-                    {card.desc}
-                  </p>
-                </motion.div>
-              ))}
-            </motion.div>
-          </motion.div>
+                  <div className="p-6">
+                    <p
+                      className="text-2xl font-bold mb-2"
+                      style={{ color: "#d97706" }}
+                    >
+                      {step.num}
+                    </p>
+                    <p className="text-white font-medium text-base">
+                      {step.text}
+                    </p>
+                  </div>
+                </div>
+              </FadeIn>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* Section 6 — Benefits */}
-      <section className="bg-[#f0ebe3] py-36">
-        <div className="max-w-6xl mx-auto px-6">
-          <motion.div
-            variants={stagger}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-80px" }}
-          >
-            <motion.h2
-              variants={fadeUp}
-              className="text-4xl sm:text-5xl font-semibold text-[#111111] mb-12"
+      {/* Lifestyle Section */}
+      <section className="relative overflow-hidden bg-[#0a0a0a]">
+        <FadeIn>
+          <div className="relative" style={{ minHeight: "50vh" }}>
+            <img
+              src="/assets/generated/lifestyle-bedroom.dim_1600x900.jpg"
+              alt="Relaxing bedroom environment"
+              className="w-full h-full object-cover absolute inset-0"
+              style={{ minHeight: "50vh" }}
+            />
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  "linear-gradient(to top, rgba(0,0,0,0.80) 0%, rgba(0,0,0,0.2) 60%, transparent 100%)",
+              }}
+            />
+            <div
+              className="relative flex flex-col items-center justify-end text-center pb-14 px-6"
+              style={{ minHeight: "50vh" }}
             >
-              Designed for Everyday Use
-            </motion.h2>
-            <motion.div
-              variants={stagger}
-              className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5"
+              <p className="text-white font-bold text-2xl md:text-4xl">
+                Feel the difference in your room
+              </p>
+              <p className="mt-3 text-base md:text-lg text-white/60">
+                Cleaner air. Better sleep.
+              </p>
+            </div>
+          </div>
+        </FadeIn>
+      </section>
+
+      {/* Additional Lifestyle placeholders: Living Room + Closed Indoor */}
+      <section className="py-16 bg-[#0a0a0a]">
+        <div className="max-w-5xl mx-auto px-5 grid md:grid-cols-2 gap-5">
+          <FadeIn>
+            <div
+              className="w-full flex items-center justify-center rounded-2xl"
+              style={{ ...darkPlaceholder, aspectRatio: "16/9" }}
             >
-              {benefits.map((benefit, i) => (
-                <motion.div
-                  key={benefit}
-                  variants={fadeUp}
-                  whileHover={{
-                    y: -4,
-                    boxShadow: "0 8px 32px rgba(0,0,0,0.10)",
-                  }}
-                  transition={{ type: "spring", stiffness: 300 }}
-                  className="bg-white rounded-2xl p-5 shadow-sm flex items-center gap-4"
-                  data-ocid={`benefits.item.${i + 1}`}
-                >
-                  <div className="w-8 h-8 rounded-full bg-[#111111] flex items-center justify-center flex-shrink-0">
-                    <Check className="w-4 h-4 text-white" />
+              <span style={{ ...placeholderLabelDark }}>[ Living Room ]</span>
+            </div>
+          </FadeIn>
+          <FadeIn delay={0.1}>
+            <div
+              className="w-full flex items-center justify-center rounded-2xl"
+              style={{ ...darkPlaceholder, aspectRatio: "16/9" }}
+            >
+              <span style={{ ...placeholderLabelDark }}>
+                [ Closed Indoor Environment ]
+              </span>
+            </div>
+          </FadeIn>
+        </div>
+      </section>
+
+      {/* Video Placeholder */}
+      <section className="py-24 bg-white">
+        <div className="max-w-3xl mx-auto px-5">
+          <FadeIn>
+            <div
+              className="rounded-2xl overflow-hidden relative"
+              style={{ ...darkPlaceholder, aspectRatio: "16/9" }}
+            >
+              <div
+                className="absolute inset-0 flex flex-col items-center justify-center gap-4"
+                style={{
+                  background:
+                    "radial-gradient(ellipse at center, rgba(217,119,6,0.10) 0%, transparent 70%)",
+                }}
+              >
+                <p style={placeholderLabelDark}>[ Product Demo Video ]</p>
+                <div className="w-16 h-16 rounded-full bg-white/10 border border-white/20 flex items-center justify-center">
+                  <Play className="w-6 h-6 text-white ml-1" />
+                </div>
+              </div>
+            </div>
+            <p className="text-center text-[#999] text-sm mt-4">
+              See how LumaAir works in real conditions
+            </p>
+          </FadeIn>
+        </div>
+      </section>
+
+      {/* Benefits */}
+      <section className="py-28 md:py-32" style={{ background: "#f5f0e8" }}>
+        <div className="max-w-4xl mx-auto px-5">
+          <FadeIn>
+            <h2 className="text-4xl md:text-5xl font-bold text-[#0a0a0a] leading-tight mb-12">
+              Designed for everyday use
+            </h2>
+          </FadeIn>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
+            {[
+              "Works with your AC",
+              "Reduces odor",
+              "No purifier needed",
+              "Easy setup",
+              "Silent",
+            ].map((benefit, i) => (
+              <FadeIn key={benefit} delay={i * 0.08}>
+                <div className="bg-white rounded-2xl p-6 flex flex-col items-center text-center gap-4 shadow-[0_4px_24px_rgba(0,0,0,0.07)]">
+                  <div
+                    className="flex items-center justify-center flex-shrink-0"
+                    style={{
+                      ...lightPlaceholder,
+                      width: 48,
+                      height: 48,
+                      borderRadius: 12,
+                    }}
+                  >
+                    <span
+                      style={{ ...placeholderLabelLight, fontSize: "0.6rem" }}
+                    >
+                      [ icon ]
+                    </span>
                   </div>
-                  <span className="text-[#111111] text-sm font-medium leading-snug">
+                  <p className="text-[#0a0a0a] font-medium text-sm leading-snug">
                     {benefit}
-                  </span>
-                </motion.div>
-              ))}
-            </motion.div>
-          </motion.div>
+                  </p>
+                </div>
+              </FadeIn>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* Trust Booster — Designed for Real Indian Homes */}
-      <section className="bg-white py-36">
-        <div className="max-w-6xl mx-auto px-6">
-          <motion.div
-            variants={stagger}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-80px" }}
-            className="max-w-[700px]"
-          >
-            <motion.h2
-              variants={fadeUp}
-              className="text-4xl sm:text-5xl font-semibold text-[#111111] mb-6 leading-tight"
-            >
-              Designed for Real Indian Homes
-            </motion.h2>
-            <motion.p
-              variants={fadeUp}
-              className="text-[#5c5c5c] text-lg leading-loose"
-            >
+      {/* Indian Homes */}
+      <section className="py-28 md:py-32 bg-white">
+        <div className="max-w-4xl mx-auto px-5">
+          <FadeIn>
+            <h2 className="text-4xl md:text-5xl font-bold text-[#0a0a0a] leading-tight mb-4">
+              Designed for real Indian homes
+            </h2>
+            <p className="text-[#666] text-lg leading-relaxed mb-10">
               Works in bedrooms, rented flats, and closed AC rooms where airflow
               is limited and odor builds up easily.
-            </motion.p>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Section 7 — Education */}
-      <section className="bg-[#f0ebe3] py-36">
-        <div className="max-w-6xl mx-auto px-6">
-          <motion.div
-            variants={stagger}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-80px" }}
-            className="max-w-[700px]"
-          >
-            <motion.h2
-              variants={fadeUp}
-              className="text-4xl sm:text-5xl font-semibold text-[#111111] mb-6"
-            >
-              A Better Way to Fix Room Smell
-            </motion.h2>
-            <motion.p
-              variants={fadeUp}
-              className="text-[#5c5c5c] text-lg leading-loose"
-            >
-              Closed rooms trap odor from cooking, smoke, and daily living.
-            </motion.p>
-            <motion.p
-              variants={fadeUp}
-              className="text-[#5c5c5c] text-lg leading-loose mt-4"
-            >
-              Instead of adding bulky machines, this solution works with airflow
-              already present — making your room feel fresher over time.
-            </motion.p>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Section 8 — Social Proof / Testimonials */}
-      <section className="bg-white py-36">
-        <div className="max-w-6xl mx-auto px-6">
-          <motion.div
-            variants={stagger}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-80px" }}
-          >
-            <motion.p
-              variants={fadeUp}
-              className="text-sm tracking-[0.15em] uppercase text-[#999] mb-4"
-            >
-              Early Feedback
-            </motion.p>
-            <motion.h2
-              variants={fadeUp}
-              className="text-4xl sm:text-5xl font-semibold text-[#111111] mb-12"
-            >
-              What Early Testers Are Saying
-            </motion.h2>
-            <motion.div
-              variants={stagger}
-              className="grid sm:grid-cols-3 gap-5"
-            >
-              {testimonials.map((t, i) => (
-                <motion.div
-                  key={t.name}
-                  variants={fadeUp}
-                  className="bg-[#f0ebe3] rounded-2xl p-6 shadow-card"
-                  data-ocid={`testimonials.item.${i + 1}`}
-                >
-                  <p className="text-[#333] text-base leading-relaxed mb-4">
-                    &ldquo;{t.quote}&rdquo;
-                  </p>
-                  <div className="text-sm text-[#888]">
-                    <span className="font-medium text-[#5c5c5c]">{t.name}</span>{" "}
-                    · {t.city}
-                  </div>
-                </motion.div>
-              ))}
-            </motion.div>
-            <motion.p variants={fadeUp} className="text-[#aaa] text-sm mt-8">
-              From early testers and prototype users.
-            </motion.p>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Trust Section — Built after observing real problems */}
-      <section className="bg-[#f0ebe3] py-36">
-        <div className="max-w-6xl mx-auto px-6">
-          <motion.div
-            variants={stagger}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-80px" }}
-            className="max-w-[700px]"
-          >
-            <motion.h2
-              variants={fadeUp}
-              className="text-4xl sm:text-5xl font-semibold text-[#111111] mb-10 leading-tight"
-            >
-              Built after observing real problems in Indian homes
-            </motion.h2>
-            <motion.div variants={stagger} className="space-y-6">
+            </p>
+          </FadeIn>
+          <FadeIn delay={0.1}>
+            <div className="grid md:grid-cols-2 gap-5 mb-10">
+              <img
+                src="/assets/generated/indian-kitchen.dim_800x600.jpg"
+                alt="Indian kitchen"
+                className="w-full rounded-2xl object-cover"
+                style={{ aspectRatio: "4/3" }}
+              />
+              <img
+                src="/assets/generated/indian-bedroom.dim_800x600.jpg"
+                alt="Bedroom setup"
+                className="w-full rounded-2xl object-cover"
+                style={{ aspectRatio: "4/3" }}
+              />
+            </div>
+          </FadeIn>
+          <FadeIn delay={0.2}>
+            <div className="space-y-3">
               {[
                 "Designed for closed AC rooms",
                 "Tested in real flats and bedrooms",
-                "Made for Indian climate and lifestyle",
-              ].map((point, i) => (
-                <motion.div
-                  key={point}
-                  variants={fadeUp}
-                  className="flex items-center gap-4"
-                  data-ocid={`trust.item.${i + 1}`}
-                >
-                  <div className="w-7 h-7 rounded-full bg-[#111111] flex items-center justify-center flex-shrink-0">
-                    <Check className="w-3.5 h-3.5 text-white" />
-                  </div>
-                  <span className="text-[#111111] text-lg font-medium">
-                    {point}
-                  </span>
-                </motion.div>
+                "Made for Indian cooking and lifestyle",
+              ].map((point) => (
+                <div key={point} className="flex items-center gap-3 py-2">
+                  <div
+                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                    style={{ background: "#d97706" }}
+                  />
+                  <p className="text-[#0a0a0a] font-medium">{point}</p>
+                </div>
               ))}
-            </motion.div>
-          </motion.div>
+            </div>
+          </FadeIn>
         </div>
       </section>
 
-      {/* Follow the Journey — Social Section */}
-      <section className="bg-[#f8f6f2] py-36">
-        <div className="max-w-6xl mx-auto px-6">
-          <motion.div
-            variants={stagger}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-80px" }}
-          >
-            <motion.p
-              variants={fadeUp}
-              className="text-sm tracking-[0.15em] uppercase text-[#999] mb-4"
-            >
-              Building in public
-            </motion.p>
-            <motion.h2
-              variants={fadeUp}
-              className="text-4xl sm:text-5xl font-semibold text-[#111111] mb-4"
-            >
-              Follow the Journey
-            </motion.h2>
-            <motion.p
-              variants={fadeUp}
-              className="text-[#6b6b6b] text-lg leading-relaxed mb-14 max-w-[600px]"
-            >
-              We're documenting the journey — from problem to product.
-            </motion.p>
-            <motion.div
-              variants={stagger}
-              className="grid sm:grid-cols-2 gap-6 max-w-3xl"
-            >
-              <motion.div
-                variants={fadeUp}
-                className="bg-white rounded-3xl p-8"
-                data-ocid="social.item.1"
-              >
-                <p className="text-xs tracking-[0.15em] uppercase text-[#999] mb-3">
-                  Instagram
-                </p>
-                <h3 className="text-xl font-semibold text-[#111111] mb-3">
-                  @breathefreshair.india
-                </h3>
-                <p className="text-[#6b6b6b] text-sm leading-relaxed mb-8">
-                  Daily insights on closed room air, real problems, and updates.
-                </p>
-                <a
-                  href="https://instagram.com/breathefreshair.india"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block rounded-full border border-[#111111] text-[#111111] text-xs font-medium px-6 py-2.5 hover:bg-[#111111] hover:text-white transition-all duration-200"
-                  data-ocid="social.link"
-                >
-                  Follow on Instagram
-                </a>
-              </motion.div>
-              <motion.div
-                variants={fadeUp}
-                className="bg-white rounded-3xl p-8"
-                data-ocid="social.item.2"
-              >
-                <p className="text-xs tracking-[0.15em] uppercase text-[#999] mb-3">
-                  YouTube
-                </p>
-                <h3 className="text-xl font-semibold text-[#111111] mb-3">
-                  @BreatheFreshAir
-                </h3>
-                <p className="text-[#6b6b6b] text-sm leading-relaxed mb-8">
-                  Deep dives, experiments, and real testing videos.
-                </p>
-                <a
-                  href="https://youtube.com/@BreatheFreshAir"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block rounded-full border border-[#111111] text-[#111111] text-xs font-medium px-6 py-2.5 hover:bg-[#111111] hover:text-white transition-all duration-200"
-                  data-ocid="social.link"
-                >
-                  Watch on YouTube
-                </a>
-              </motion.div>
-            </motion.div>
-          </motion.div>
+      {/* Emotional */}
+      <section className="py-32 md:py-40" style={{ background: "#0a0a0a" }}>
+        <div className="max-w-3xl mx-auto px-5 text-center">
+          <FadeIn>
+            <p className="text-3xl md:text-5xl font-bold text-white leading-tight mb-6">
+              You spend 8–10 hours in your room every day.
+            </p>
+            <p className="text-white/50 text-xl">
+              The air you breathe there matters more than you think.
+            </p>
+          </FadeIn>
         </div>
       </section>
 
-      {/* Section 9 — Pre-Launch Offer */}
-      <section className="bg-[#f0ebe3] py-36">
-        <div className="max-w-6xl mx-auto px-6">
-          <motion.div
-            variants={stagger}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-80px" }}
-            className="max-w-[700px]"
-          >
-            <motion.span
-              variants={fadeUp}
-              className="inline-block mb-4 px-3 py-1 rounded-full bg-white text-[#5c5c5c] text-xs font-medium tracking-wide"
-            >
-              Pre-Launch
-            </motion.span>
-            <motion.h2
-              variants={fadeUp}
-              className="text-4xl sm:text-5xl font-semibold text-[#111111] mb-4"
-            >
+      {/* Experience */}
+      <section className="py-28 md:py-32" style={{ background: "#f5f0e8" }}>
+        <div className="max-w-3xl mx-auto px-5">
+          <FadeIn>
+            <h2 className="text-4xl md:text-5xl font-bold text-[#0a0a0a] leading-tight mb-12">
+              What you&apos;ll notice after using LumaAir
+            </h2>
+          </FadeIn>
+          <div className="space-y-5">
+            {[
+              "Room feels breathable within hours",
+              "No lingering smell after cooking",
+              "Better sleep at night",
+            ].map((item, i) => (
+              <FadeIn key={item} delay={i * 0.1}>
+                <div className="bg-white rounded-2xl p-7 flex items-center gap-5 shadow-[0_4px_24px_rgba(0,0,0,0.07)]">
+                  <div
+                    className="w-2 h-2 rounded-full flex-shrink-0"
+                    style={{ background: "#d97706" }}
+                  />
+                  <p className="text-[#0a0a0a] font-medium text-lg">{item}</p>
+                </div>
+              </FadeIn>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Trust */}
+      <section className="py-28 md:py-32 bg-white">
+        <div className="max-w-4xl mx-auto px-5">
+          <FadeIn>
+            <h2 className="text-4xl md:text-5xl font-bold text-[#0a0a0a] leading-tight mb-12">
+              Built for real life
+            </h2>
+          </FadeIn>
+          <div className="grid sm:grid-cols-2 gap-5">
+            {[
+              { icon: "🏢", text: "Used in bedrooms, kitchens, and offices" },
+              { icon: "🌿", text: "No chemicals, no artificial smell" },
+              { icon: "✅", text: "Safe for daily use" },
+              { icon: "🇮🇳", text: "Designed for Indian homes" },
+            ].map((item, i) => (
+              <FadeIn key={item.text} delay={i * 0.08}>
+                <div className="flex items-start gap-4 p-6 rounded-2xl border border-[#f0f0f0] shadow-[0_2px_12px_rgba(0,0,0,0.05)]">
+                  <span className="text-2xl">{item.icon}</span>
+                  <p className="text-[#0a0a0a] font-medium">{item.text}</p>
+                </div>
+              </FadeIn>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials */}
+      <TestimonialsSection />
+
+      {/* Social */}
+      <section className="py-24 bg-white">
+        <div className="max-w-2xl mx-auto px-5 text-center">
+          <FadeIn>
+            <h2 className="text-3xl md:text-4xl font-bold text-[#0a0a0a] mb-3">
+              Stay connected with LumaAir
+            </h2>
+            <p className="text-[#888] mb-10">
+              Follow our journey, updates, and real user experiences.
+            </p>
+          </FadeIn>
+          <FadeIn delay={0.1}>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
+              <div className="flex items-center gap-3 text-[#0a0a0a]">
+                <Instagram className="w-5 h-5" style={{ color: "#d97706" }} />
+                <span className="font-medium text-sm">@lumaair.in</span>
+              </div>
+              <div className="hidden sm:block w-px h-5 bg-[#eee]" />
+              <div className="flex items-center gap-3 text-[#0a0a0a]">
+                <Youtube className="w-5 h-5" style={{ color: "#d97706" }} />
+                <span className="font-medium text-sm">LumaAir</span>
+              </div>
+              <div className="hidden sm:block w-px h-5 bg-[#eee]" />
+              <div className="flex items-center gap-3 text-[#0a0a0a]">
+                <Mail className="w-5 h-5" style={{ color: "#d97706" }} />
+                <span className="font-medium text-sm">hello@lumaair.in</span>
+              </div>
+            </div>
+          </FadeIn>
+        </div>
+      </section>
+
+      {/* Pre-Order */}
+      <section className="py-28 md:py-32" style={{ background: "#0d0c0a" }}>
+        <div className="max-w-2xl mx-auto px-5 text-center">
+          <FadeIn>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
               Launching Soon
-            </motion.h2>
-            <motion.p
-              variants={fadeUp}
-              className="text-[#5c5c5c] text-lg leading-loose mb-4"
-            >
+            </h2>
+            <p className="text-white/50 text-lg mb-10">
               Expected price:{" "}
-              <span className="font-bold text-[#111111]">₹1,599</span>
-              <br />
-              Join early access to get priority access when we launch.
-            </motion.p>
-            <motion.p variants={fadeUp} className="text-[#888] text-sm">
-              Limited first batch. No payment required.
-            </motion.p>
-            <motion.p variants={fadeUp} className="text-[#888] text-sm mt-1">
-              Tested in real Indian homes • Designed for closed AC rooms
-            </motion.p>
-            <motion.p
-              variants={fadeUp}
-              className="text-[#6b6b6b] text-base mt-3"
+              <span style={{ color: "#d97706" }} className="font-semibold">
+                ₹1,599
+              </span>
+            </p>
+          </FadeIn>
+          <FadeIn delay={0.1}>
+            <div className="space-y-3 mb-10">
+              {[
+                "First 100 units — early access",
+                "Spots filling fast",
+                "No upfront payment required",
+              ].map((point) => (
+                <div
+                  key={point}
+                  className="flex items-center justify-center gap-2"
+                >
+                  <div
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{ background: "#d97706" }}
+                  />
+                  <p className="text-white/60 text-sm">{point}</p>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={openModal}
+              className="bg-white text-[#0a0a0a] font-semibold text-base px-8 py-4 rounded-full hover:bg-white/95 hover:scale-[1.02] active:scale-95 transition-all duration-200"
+              data-ocid="preorder.primary_button"
             >
-              Launching with a limited first batch to test real demand.
-            </motion.p>
-            <motion.p variants={fadeUp} className="text-[#888] text-sm mt-2">
-              Manufacturing begins after first batch confirmation.
-            </motion.p>
-            <motion.p
-              variants={fadeUp}
-              className="text-[#111111] text-sm font-medium mt-3 flex items-center gap-2"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-[#111] inline-block" />
-              Spots filling fast
-            </motion.p>
-          </motion.div>
+              Reserve Your LumaAir
+            </button>
+            <p className="text-white/30 text-xs mt-4">
+              You&apos;ll only be contacted when we launch. No spam.
+            </p>
+          </FadeIn>
         </div>
       </section>
 
-      {/* Section 10 — Final CTA */}
-      <section className="bg-[#111111] py-36">
-        <div className="max-w-6xl mx-auto px-6 text-center">
-          <motion.div
-            variants={stagger}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-80px" }}
-          >
-            <motion.p
-              variants={fadeUp}
-              className="text-sm tracking-[0.2em] uppercase text-white/40 mb-4"
+      {/* Final CTA */}
+      <section className="py-32 md:py-40" style={{ background: "#000" }}>
+        <div className="max-w-2xl mx-auto px-5 text-center">
+          <FadeIn>
+            <h2 className="text-4xl md:text-6xl font-bold text-white leading-tight mb-4">
+              Don&apos;t get used to bad air.
+            </h2>
+            <p className="text-white/40 text-xl mb-10">
+              Fix it before it becomes normal.
+            </p>
+            <button
+              type="button"
+              onClick={openModal}
+              className="bg-white text-[#0a0a0a] font-semibold text-base px-10 py-4 rounded-full hover:bg-white/95 hover:scale-[1.02] active:scale-95 transition-all duration-200 shadow-2xl"
+              data-ocid="finalcta.primary_button"
             >
-              Limited Access
-            </motion.p>
-            <motion.h2
-              variants={fadeUp}
-              className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight max-w-3xl mx-auto"
-            >
-              Be among the first to experience better air.
-            </motion.h2>
-            <motion.p
-              variants={fadeUp}
-              className="text-white/60 text-xl mb-10 max-w-xl mx-auto"
-            >
-              Limited first batch. No upfront payment.
-            </motion.p>
-            <motion.div variants={fadeUp} className="flex justify-center mb-4">
-              <button
-                onClick={() => setModalOpen(true)}
-                type="button"
-                className="rounded-full bg-white text-[#111111] px-10 py-4 text-base font-medium hover:bg-white/90 transition-colors"
-                data-ocid="cta.primary_button"
-              >
-                Pre-order Early Access
-              </button>
-            </motion.div>
-            <motion.p variants={fadeUp} className="text-white/40 text-sm">
-              No spam. Only product updates.
-            </motion.p>
-          </motion.div>
+              Reserve Your LumaAir
+            </button>
+            <p className="text-white/25 text-sm mt-5">
+              No upfront payment · Limited first batch
+            </p>
+          </FadeIn>
         </div>
       </section>
 
-      {/* Section 11 — FAQ */}
-      <section id="faq" className="bg-white py-36">
-        <div className="max-w-3xl mx-auto px-6">
-          <motion.div
-            variants={stagger}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-80px" }}
-          >
-            <motion.h2
-              variants={fadeUp}
-              className="text-4xl sm:text-5xl font-semibold text-[#111111] mb-12"
-            >
-              FAQ
-            </motion.h2>
-            <motion.div variants={fadeUp}>
-              <Accordion
-                type="single"
-                collapsible
-                className="space-y-2"
-                data-ocid="faq.panel"
-              >
-                <AccordionItem
-                  value="q1"
-                  className="border border-[#eee] rounded-2xl px-6"
-                >
-                  <AccordionTrigger className="text-[#111111] font-medium hover:no-underline py-5">
-                    Does it completely remove smell?
-                  </AccordionTrigger>
-                  <AccordionContent className="text-[#666] pb-5 leading-loose">
-                    It helps reduce odor buildup significantly over time.
-                  </AccordionContent>
-                </AccordionItem>
-                <AccordionItem
-                  value="q2"
-                  className="border border-[#eee] rounded-2xl px-6"
-                >
-                  <AccordionTrigger className="text-[#111111] font-medium hover:no-underline py-5">
-                    Is this like an air purifier?
-                  </AccordionTrigger>
-                  <AccordionContent className="text-[#666] pb-5 leading-loose">
-                    No — it's a simpler, more affordable solution that works
-                    with your AC.
-                  </AccordionContent>
-                </AccordionItem>
-                <AccordionItem
-                  value="q3"
-                  className="border border-[#eee] rounded-2xl px-6"
-                >
-                  <AccordionTrigger className="text-[#111111] font-medium hover:no-underline py-5">
-                    When will it launch?
-                  </AccordionTrigger>
-                  <AccordionContent className="text-[#666] pb-5 leading-loose">
-                    Expected within 30–45 days after preorders.
-                  </AccordionContent>
-                </AccordionItem>
-                <AccordionItem
-                  value="q4"
-                  className="border border-[#eee] rounded-2xl px-6"
-                >
-                  <AccordionTrigger className="text-[#111111] font-medium hover:no-underline py-5">
-                    Do I need to install anything?
-                  </AccordionTrigger>
-                  <AccordionContent className="text-[#666] pb-5 leading-loose">
-                    No — just place it near your AC vent. No tools required.
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-            </motion.div>
-          </motion.div>
+      {/* FAQ */}
+      <section className="py-28 md:py-32 bg-white">
+        <div className="max-w-2xl mx-auto px-5">
+          <FadeIn>
+            <h2 className="text-4xl font-bold text-[#0a0a0a] mb-12">
+              Frequently asked
+            </h2>
+          </FadeIn>
+          <div className="space-y-6">
+            {[
+              {
+                q: "Does it completely remove smell?",
+                a: "It continuously reduces and neutralizes odor over time using natural adsorption.",
+              },
+              {
+                q: "Is this an air purifier?",
+                a: "No. It's a passive odor neutralizer that works with AC airflow — no electricity or filters needed.",
+              },
+              {
+                q: "Do I need installation?",
+                a: "No tools needed. Just place it near your AC vent.",
+              },
+              {
+                q: "Is it safe for daily use?",
+                a: "Yes, it uses natural materials and releases no chemicals or artificial fragrance.",
+              },
+            ].map((item, i) => (
+              <FadeIn key={item.q} delay={i * 0.07}>
+                <div className="border-b border-[#f0f0f0] pb-6">
+                  <p className="text-[#0a0a0a] font-semibold text-lg mb-2">
+                    {item.q}
+                  </p>
+                  <p className="text-[#666] leading-relaxed">{item.a}</p>
+                </div>
+              </FadeIn>
+            ))}
+          </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-[#111111] py-12">
-        <div className="max-w-6xl mx-auto px-6 flex flex-col items-center gap-3 text-center">
-          <p className="font-display text-white text-xl font-semibold tracking-tight">
-            Airu
-          </p>
-          <p className="text-white/40 text-sm">
-            © {new Date().getFullYear()} Airu. Built for modern Indian homes.
-          </p>
-          <a
-            href="mailto:airu.product@gmail.com"
-            className="text-white/40 text-sm hover:text-white/70 transition-colors"
-          >
-            airu.product@gmail.com
-          </a>
-          <p className="text-white/40 text-sm mt-4">Follow us:</p>
-          <div className="flex gap-6">
-            <a
-              href="https://instagram.com/breathefreshair.india"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-white/40 text-sm hover:text-white/70 transition-colors"
-              data-ocid="footer.link"
-            >
-              Instagram
-            </a>
-            <a
-              href="https://youtube.com/@BreatheFreshAir"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-white/40 text-sm hover:text-white/70 transition-colors"
-              data-ocid="footer.link"
-            >
-              YouTube
-            </a>
+      <footer className="py-16" style={{ background: "#0a0a0a" }}>
+        <div className="max-w-5xl mx-auto px-5">
+          <div className="flex flex-col md:flex-row justify-between gap-10 mb-12">
+            <div>
+              <p className="text-white font-bold text-xl tracking-widest mb-2">
+                LumaAir
+              </p>
+              <p className="text-white/40 text-sm">
+                Fresh air for closed spaces
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <p className="text-white/60 text-sm">hello@lumaair.in</p>
+              <p className="text-white/40 text-sm">Instagram: @lumaair.in</p>
+              <p className="text-white/40 text-sm">YouTube: LumaAir</p>
+            </div>
           </div>
-          <p className="text-white/20 text-xs mt-4">
-            © {new Date().getFullYear()}. Built with ❤️ using{" "}
+          <div className="border-t border-white/10 pt-6 flex flex-col sm:flex-row justify-between items-center gap-3">
+            <p className="text-white/20 text-xs">
+              © {new Date().getFullYear()} LumaAir. All rights reserved.
+            </p>
             <a
               href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(typeof window !== "undefined" ? window.location.hostname : "")}`}
+              className="text-white/20 text-xs hover:text-white/40 transition-colors"
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-white/40 transition-colors"
             >
-              caffeine.ai
+              Built with love using caffeine.ai
             </a>
-          </p>
+          </div>
         </div>
       </footer>
 
-      {/* Sticky Bottom CTA Bar */}
-      {showSticky && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#111111] border-t border-white/10 py-4 px-6 flex items-center justify-between">
-          <p className="text-white/70 text-sm hidden sm:block">
-            Limited first batch available
-          </p>
-          <p className="text-white/70 text-sm sm:hidden">
-            ⚡ Limited first batch
-          </p>
+      {/* Sticky CTA Bar */}
+      <div
+        className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 backdrop-blur-md"
+        style={{ background: "rgba(10,10,10,0.90)" }}
+        data-ocid="sticky.panel"
+      >
+        <div className="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Zap className="w-4 h-4" style={{ color: "#d97706" }} />
+            <span className="text-white/70 text-sm font-medium">
+              Limited Pre-Order Batch
+            </span>
+          </div>
           <button
             type="button"
-            onClick={() => setModalOpen(true)}
-            className="rounded-full bg-white text-[#111111] px-6 py-2.5 text-sm font-medium hover:bg-white/90 active:scale-95 transition-all"
+            onClick={openModal}
+            className="bg-white text-[#0a0a0a] font-semibold text-sm px-5 py-2 rounded-full hover:bg-white/90 transition-all"
             data-ocid="sticky.primary_button"
           >
-            Pre-order
+            Reserve Your LumaAir
           </button>
         </div>
-      )}
+      </div>
+
+      <WaitlistModal open={modalOpen} onClose={closeModal} />
     </div>
   );
 }

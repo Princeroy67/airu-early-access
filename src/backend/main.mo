@@ -68,6 +68,9 @@ actor {
   var nextEntryId = 0;
   let entries = Map.empty<Nat, WaitlistEntry>();
 
+  // Lead Status Storage (separate map to avoid migration issues)
+  let leadStatuses = Map.empty<Nat, Text>();
+
   // Public Functions (accessible to everyone including guests)
   public shared ({ caller }) func submitWaitlist(name : Text, phone : Text, isWhatsApp : Bool, city : Text) : async Nat {
     let id = nextEntryId;
@@ -77,7 +80,7 @@ actor {
       phone;
       isWhatsApp;
       city;
-      timestamp = Int.abs(Time.now());
+      timestamp = Time.now();
     };
     entries.add(id, entry);
     nextEntryId += 1;
@@ -104,6 +107,20 @@ actor {
       Runtime.trap("Entry does not exist.");
     };
     entries.remove(id);
+  };
+
+  public query ({ caller }) func getLeadStatuses() : async [(Nat, Text)] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can access lead statuses");
+    };
+    leadStatuses.entries().toArray();
+  };
+
+  public shared ({ caller }) func updateLeadStatus(id : Nat, status : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can update lead statuses");
+    };
+    leadStatuses.add(id, status);
   };
 
   // Blog Types
@@ -139,7 +156,7 @@ actor {
       description;
       content;
       publishDate;
-      createdAt = Int.abs(Time.now());
+      createdAt = Time.now();
     };
 
     blogPosts.add(id, post);
@@ -186,5 +203,112 @@ actor {
 
   public query ({ caller }) func getPost(id : Nat) : async ?BlogPost {
     blogPosts.get(id);
+  };
+
+  // ===== REVIEW SYSTEM =====
+
+  public type ReviewStatus = { #pending; #approved };
+
+  public type Review = {
+    id : Nat;
+    name : Text;
+    city : Text;
+    rating : Nat; // 1-5
+    message : Text;
+    status : ReviewStatus;
+    createdAt : Int;
+  };
+
+  module Review {
+    public func compareCreatedAtDesc(a : Review, b : Review) : Order.Order {
+      Int.compare(b.createdAt, a.createdAt);
+    };
+  };
+
+  var nextReviewId = 0;
+  let reviews = Map.empty<Nat, Review>();
+
+  // Public: anyone can submit a review (goes to pending)
+  public shared ({ caller }) func submitReview(name : Text, city : Text, rating : Nat, message : Text) : async Nat {
+    if (rating < 1 or rating > 5) {
+      Runtime.trap("Rating must be between 1 and 5.");
+    };
+    let id = nextReviewId;
+    let review : Review = {
+      id;
+      name;
+      city;
+      rating;
+      message;
+      status = #pending;
+      createdAt = Time.now();
+    };
+    reviews.add(id, review);
+    nextReviewId += 1;
+    id;
+  };
+
+  // Public: get all approved reviews
+  public query ({ caller }) func getApprovedReviews() : async [Review] {
+    let approved = reviews.values().toArray().filter(func(r : Review) : Bool { r.status == #approved });
+    approved.sort(Review.compareCreatedAtDesc);
+  };
+
+  // Admin: get pending reviews
+  public query ({ caller }) func getPendingReviews() : async [Review] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view pending reviews");
+    };
+    let pending = reviews.values().toArray().filter(func(r : Review) : Bool { r.status == #pending });
+    pending.sort(Review.compareCreatedAtDesc);
+  };
+
+  // Admin: approve a review
+  public shared ({ caller }) func approveReview(id : Nat) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can approve reviews");
+    };
+    switch (reviews.get(id)) {
+      case (?r) {
+        reviews.add(id, { r with status = #approved });
+      };
+      case null {
+        Runtime.trap("Review does not exist.");
+      };
+    };
+  };
+
+  // Admin: delete a review
+  public shared ({ caller }) func deleteReview(id : Nat) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can delete reviews");
+    };
+    if (not reviews.containsKey(id)) {
+      Runtime.trap("Review does not exist.");
+    };
+    reviews.remove(id);
+  };
+
+  // Admin: add a manual review (immediately approved)
+  public shared ({ caller }) func addManualReview(name : Text, city : Text, rating : Nat, message : Text) : async Nat {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can add manual reviews");
+    };
+    if (rating < 1 or rating > 5) {
+      Runtime.trap("Rating must be between 1 and 5.");
+    };
+    let id = nextReviewId;
+    let review : Review = {
+      id;
+      name;
+      city;
+      rating;
+      message;
+      status = #approved;
+      createdAt = Time.now();
+    };
+    reviews.add(id, review);
+    nextReviewId += 1;
+    id;
   };
 };

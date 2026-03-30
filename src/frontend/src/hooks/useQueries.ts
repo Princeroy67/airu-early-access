@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { BlogPost, WaitlistEntry } from "../backend";
+import type { BlogPost, Review, WaitlistEntry } from "../backend";
+import { createActorWithConfig } from "../config";
 import { useActor } from "./useActor";
+
+export type { Review };
 
 export function useWaitlistCount() {
   const { actor, isFetching } = useActor();
@@ -47,8 +50,9 @@ export function useSubmitWaitlist() {
     { name: string; phone: string; isWhatsApp: boolean; city: string }
   >({
     mutationFn: async ({ name, phone, isWhatsApp, city }) => {
-      if (!actor) throw new Error("Not connected");
-      return actor.submitWaitlist(name, phone, isWhatsApp, city);
+      // Use cached actor if available, otherwise create a fresh anonymous one
+      const resolvedActor = actor ?? (await createActorWithConfig());
+      return resolvedActor.submitWaitlist(name, phone, isWhatsApp, city);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["waitlistCount"] });
@@ -146,6 +150,125 @@ export function useDeletePost() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["blogPosts"] });
+    },
+  });
+}
+
+export function useLeadStatuses() {
+  const { actor, isFetching } = useActor();
+  return useQuery<Map<string, string>>({
+    queryKey: ["leadStatuses"],
+    queryFn: async () => {
+      if (!actor) return new Map();
+      const pairs = await actor.getLeadStatuses();
+      return new Map(
+        pairs.map(([id, status]: [bigint, string]) => [id.toString(), status]),
+      );
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useUpdateLeadStatus() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, { id: bigint; status: string }>({
+    mutationFn: async ({ id, status }) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.updateLeadStatus(id, status);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leadStatuses"] });
+    },
+  });
+}
+
+export function useGetApprovedReviews() {
+  const { actor, isFetching } = useActor();
+  return useQuery<Review[]>({
+    queryKey: ["approvedReviews"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.getApprovedReviews();
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useGetPendingReviews() {
+  const { actor, isFetching } = useActor();
+  return useQuery<Review[]>({
+    queryKey: ["pendingReviews"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.getPendingReviews();
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useSubmitReview() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation<
+    bigint,
+    Error,
+    { name: string; city: string; rating: number; message: string }
+  >({
+    mutationFn: async ({ name, city, rating, message }) => {
+      const resolvedActor = actor ?? (await createActorWithConfig());
+      return resolvedActor.submitReview(name, city, BigInt(rating), message);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["approvedReviews"] });
+    },
+  });
+}
+
+export function useApproveReview() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, bigint>({
+    mutationFn: async (id) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.approveReview(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pendingReviews"] });
+      queryClient.invalidateQueries({ queryKey: ["approvedReviews"] });
+    },
+  });
+}
+
+export function useDeleteReview() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, bigint>({
+    mutationFn: async (id) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.deleteReview(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pendingReviews"] });
+      queryClient.invalidateQueries({ queryKey: ["approvedReviews"] });
+    },
+  });
+}
+
+export function useAddManualReview() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation<
+    bigint,
+    Error,
+    { name: string; city: string; rating: number; message: string }
+  >({
+    mutationFn: async ({ name, city, rating, message }) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.addManualReview(name, city, BigInt(rating), message);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["approvedReviews"] });
     },
   });
 }
